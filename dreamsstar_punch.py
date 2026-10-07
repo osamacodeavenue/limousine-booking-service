@@ -60,6 +60,7 @@ CHECK_URLS = [f"{ADMIN_BASE}/admin/manage_bookings", f"{ADMIN_BASE}/admin/all_bo
 
 RIDES_LOG = "rides_log.csv"          # written by sixt_ride_bot.py
 PUNCHED_FILE = "punched_rides.json"
+BOOKINGS_LOG = "bookings_log.csv"    # Sixt ride id -> admin Booking Code (JO-...) for every punch
 PROFILE_DIR = os.path.abspath("./dreamsstar_chrome_profile")
 DRY_RUN = True
 WATCH_SECONDS = 60
@@ -123,6 +124,17 @@ def load_punched() -> set:
 def save_punched(ids: set):
     with open(PUNCHED_FILE, "w", encoding="utf-8") as f:
         json.dump(sorted(ids), f, indent=1)
+
+
+def log_booking(b: dict, booking_code: str, status: str):
+    new = not os.path.exists(BOOKINGS_LOG)
+    with open(BOOKINGS_LOG, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow(["punched_at", "ride_id", "booking_code", "trip_date", "amount",
+                        "pickup", "drop_off", "status"])
+        w.writerow([datetime.now().isoformat(timespec="seconds"), b["booking_reference"], booking_code,
+                    b["trip_date"], b["booking_amount"], b["pickup_address"], b["drop_off_address"], status])
 
 
 def read_accepted(decisions=("accepted",)) -> list[dict]:
@@ -276,7 +288,26 @@ def already_in_portal(driver, ref: str) -> bool:
         return False
 
 
-def fill_form(driver, b: dict):
+def read_booking_code(driver) -> str:
+    """The portal generates the Booking Code (e.g. JO-1791395706) when the form opens."""
+    return driver.execute_script("""
+        const f = document.querySelector('#frm') || document;
+        for (const n of ['booking_code', 'bookingcode', 'booking_no', 'code']) {
+            const e = f.querySelector('[name="'+n+'"], #'+n);
+            if (e && e.value) return e.value.trim();
+        }
+        for (const l of f.querySelectorAll('label')) {      // fall back to the "Booking Code" label
+            if (!/booking\\s*code/i.test(l.textContent)) continue;
+            const e = (l.htmlFor && document.getElementById(l.htmlFor))
+                   || l.parentElement.querySelector('input, textarea');
+            if (e && e.value) return e.value.trim();
+        }
+        return '';
+    """) or ""
+
+
+def fill_form(driver, b: dict) -> str:
+    """Fill the Add Booking form and return the Booking Code the portal generated."""
     find_add_url(driver)
 
     # selects + readonly/date/select2 fields are set through jQuery so the page's
@@ -307,6 +338,7 @@ def fill_form(driver, b: dict):
             lambda d: d.execute_script("return jQuery('#currency_val').val() || jQuery('#currency').val()"))
     except TimeoutException:
         print("   ! currency did not auto-fill after choosing the supplier")
+    return read_booking_code(driver)
 
 
 def submit_form(driver) -> tuple[bool, str]:
@@ -335,9 +367,10 @@ def punch(driver, ride: dict, live: bool) -> str:
     if not b["pickup_address"] or not b["drop_off_address"]:
         return f"[NEEDS FIX]  {tag} - missing pickup/drop-off address"
 
-    fill_form(driver, b)
+    code = fill_form(driver, b)
     if already_in_portal(driver, b["booking_reference"]):
-        return f"[EXISTS]     {tag}"
+        return f"[EXISTS]     {tag}"   # the code on the (unused) form would be a new one - don't show it
+    tag += f" | {code or 'no booking code'}"
     if not live:
         driver.save_screenshot(f"dryrun_{re.sub(r'[^A-Za-z0-9_-]', '_', b['booking_reference'])}.png")
         return f"[WOULD ADD]  {tag} | {b['pickup_address'][:40]} -> {b['drop_off_address'][:40]}"
@@ -346,9 +379,11 @@ def punch(driver, ride: dict, live: bool) -> str:
     if not ok:
         return f"[FAILED]     {tag} - {info}"
     if already_in_portal(driver, b["booking_reference"]):
+        log_booking(b, code, "added")
         return f"[ADDED]      {tag}"
     # submitted without errors but the list page didn't show it (pagination / ajax table).
     # Still treat it as punched so the next run doesn't create a duplicate booking.
+    log_booking(b, code, "added_unverified")
     return f"[ADDED?]     {tag} - submitted, but not found in booking list; please verify"
 
 

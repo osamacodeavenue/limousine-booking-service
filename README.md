@@ -93,6 +93,7 @@ form; if that page has no form, the bot follows the "Add Booking" link on the da
 | --- | --- |
 | `rides_log.csv` | every ride the bot saw and its decision |
 | `punched_rides.json` | ride ids already added to the admin portal |
+| `bookings_log.csv` | Sixt ride id → admin **Booking Code** (e.g. `JO-1791395706`), trip date, amount, status |
 | `dryrun_*.png` | screenshots of the filled form in dry-run mode |
 | `*_chrome_profile/` | saved login sessions |
 
