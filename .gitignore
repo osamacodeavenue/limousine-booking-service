@@ -3,6 +3,7 @@ sixt_chrome_profile/
 dreamsstar_chrome_profile/
 rides_log.csv
 punched_rides.json
+bookings_log.csv
 dryrun_*.png
 __pycache__/
 venv/
