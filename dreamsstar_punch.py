@@ -104,6 +104,11 @@ def make_driver(headless: bool) -> webdriver.Chrome:
     opts.add_argument("--window-size=1400,1000")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
+    # The admin portal only works over plain http. Stop Chrome from silently switching
+    # http:// to https:// (that lands on a different site: certificate error + 404).
+    opts.add_argument("--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,"
+                      "HttpsFirstModeV2ForTypicallySecureUsers,HttpsFirstBalancedMode")
+    opts.add_experimental_option("prefs", {"https_only_mode_enabled": False})
     return webdriver.Chrome(options=opts)
 
 
