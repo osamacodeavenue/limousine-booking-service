@@ -2,7 +2,8 @@
 Dreams Star admin portal - punch accepted Sixt rides as bookings (Selenium)
 
 Reads the rides that sixt_ride_bot.py ACCEPTED (from rides_log.csv) and creates
-each one in  http://booking.dreamsstarlimo.com/admin/add_booking
+each one as a booking in the admin portal  http://booking.dreamsstarlimo.com/administrator_dashboard
+(Add Booking form: ADD_URL; if that page has no form, the "Add Booking" link on the dashboard is used)
 
 Form mapping (from the live Add Booking form):
   booking_reference  <- Sixt ride id
@@ -44,7 +45,6 @@ from selenium.common.exceptions import (NoAlertPresentException, TimeoutExceptio
                                         WebDriverException)
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 try:
@@ -54,7 +54,8 @@ except ImportError:
 
 # ---------------- CONFIG ----------------
 ADMIN_BASE = "http://booking.dreamsstarlimo.com"
-ADD_URL = f"{ADMIN_BASE}/admin/add_booking"
+DASHBOARD_URL = f"{ADMIN_BASE}/administrator_dashboard"   # admin portal home / login landing
+ADD_URL = f"{ADMIN_BASE}/admin/add_booking"                # Add Booking form (auto-found if this moves)
 CHECK_URLS = [f"{ADMIN_BASE}/admin/manage_bookings", f"{ADMIN_BASE}/admin/all_bookings"]
 
 RIDES_LOG = "rides_log.csv"          # written by sixt_ride_bot.py
@@ -231,8 +232,30 @@ def build_booking(ride: dict) -> dict:
 
 
 # ---------- portal actions ----------
-def is_logged_in(driver) -> bool:
-    return "add_booking" in driver.current_url and driver.find_elements(By.ID, "frm")
+def has_booking_form(driver) -> bool:
+    return bool(driver.find_elements(By.CSS_SELECTOR, "#frm [name='booking_reference']"))
+
+
+def find_add_url(driver) -> str:
+    """Open the Add Booking form. Tries ADD_URL, then the Add Booking link on the dashboard."""
+    global ADD_URL
+    driver.get(ADD_URL)
+    if has_booking_form(driver):
+        return ADD_URL
+    driver.get(DASHBOARD_URL)
+    links = driver.find_elements(By.XPATH,
+        "//a[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'add booking')"
+        " or contains(@href,'add_booking') or contains(@href,'add-booking') or contains(@href,'addbooking')]")
+    for href in [l.get_attribute("href") for l in links if l.get_attribute("href")]:
+        driver.get(href)
+        if has_booking_form(driver):
+            print(f"   Add Booking form found at {href}")
+            ADD_URL = href
+            return href
+    if "login" in driver.current_url.lower() or driver.find_elements(By.CSS_SELECTOR, "input[type=password]"):
+        raise RuntimeError("Not logged in to the admin portal - run with --login first.")
+    raise RuntimeError(f"Could not find the Add Booking form (tried {ADD_URL} and the dashboard links). "
+                       "Set ADD_URL in dreamsstar_punch.py to the Add Booking page address.")
 
 
 def already_in_portal(driver, ref: str) -> bool:
@@ -249,10 +272,7 @@ def already_in_portal(driver, ref: str) -> bool:
 
 
 def fill_form(driver, b: dict):
-    driver.get(ADD_URL)
-    WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "frm")))
-    if not is_logged_in(driver):
-        raise RuntimeError("Not logged in to the admin portal - run with --login first.")
+    find_add_url(driver)
 
     # selects + readonly/date/select2 fields are set through jQuery so the page's
     # own change handlers run (supplier -> currency, booking type -> credit amount)
@@ -357,7 +377,7 @@ def main():
 
     if args.login:
         d = make_driver(headless=False)
-        d.get(ADD_URL)
+        d.get(DASHBOARD_URL)
         input("Log in to the admin portal in the browser window, then press Enter here...")
         d.quit()
         print("Session saved. Now run without --login.")
