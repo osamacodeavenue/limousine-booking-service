@@ -1,0 +1,8 @@
+# runtime state - created by the scripts, never commit
+sixt_chrome_profile/
+dreamsstar_chrome_profile/
+rides_log.csv
+punched_rides.json
+dryrun_*.png
+__pycache__/
+venv/
