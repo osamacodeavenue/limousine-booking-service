@@ -6,7 +6,7 @@ Two Selenium bots that work together:
    (`https://dcp.orange.sixt.com/availableRides`). It accepts every ride whose payout is **above $27**
    and writes each decision to `rides_log.csv`.
 2. **`dreamsstar_punch.py`** reads the **accepted** rides from `rides_log.csv` and creates each one
-   as a booking in the Dreams Star admin portal (`http://booking.dreamsstarlimo.com/admin/add_booking`).
+   as a booking in the Dreams Star admin portal (`http://booking.dreamsstarlimo.com/administrator_dashboard`).
 
 ```text
 Sixt available rides --(payout > $27, click Accept)--> rides_log.csv --(Add Booking)--> Dreams Star admin
@@ -75,7 +75,8 @@ MAX_PAGES = 10
 DRY_RUN = True
 ```
 
-`dreamsstar_punch.py`: `SUPPLIER_ID` (12 = SIXT Ride - MyDriver), `BOOKING_TYPE`, `VEHICLE_MAP`,
+`dreamsstar_punch.py`: `DASHBOARD_URL` (admin portal home, used for login), `ADD_URL` (Add Booking
+form; if that page has no form, the bot follows the "Add Booking" link on the dashboard), `SUPPLIER_ID` (12 = SIXT Ride - MyDriver), `BOOKING_TYPE`, `VEHICLE_MAP`,
 `CITY_MAP`, `DRY_RUN`, `WATCH_SECONDS`.
 
 ## 6. How the safety checks work
